@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, CheckCircle, XCircle, Clock, Shield, FileText } from 'lucide-react'
+import { ArrowLeft, CheckCircle, XCircle, Clock, Shield, FileText, Mail, ClipboardList } from 'lucide-react'
 import { useRecruitStore } from '@/stores/recruitStore'
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
@@ -22,7 +22,7 @@ const BC_STATUS_MAP: Record<string, { label: string; className: string }> = {
 export default function OfferDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { offers, resumes, jobs, approvalRecords, backgroundChecks } = useRecruitStore()
+  const { offers, resumes, jobs, approvalRecords, backgroundChecks, onboardingTasks } = useRecruitStore()
 
   const offer = offers.find((o) => o.id === id)
 
@@ -44,6 +44,7 @@ export default function OfferDetail() {
   const hrRecord = offerRecords.find((r) => r.approverId === 'hr_mgr')
   const gmRecord = offerRecords.find((r) => r.approverId === 'gm')
   const backgroundCheck = backgroundChecks.find((b) => b.offerId === offer.id)
+  const relatedTasks = onboardingTasks.filter((t) => t.offerId === offer.id)
 
   const steps = [
     {
@@ -230,6 +231,56 @@ export default function OfferDetail() {
                     <p className="text-sm text-gray-900">{new Date(backgroundCheck.completedAt).toLocaleString('zh-CN')}</p>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {(offer.status === 'sent' || offer.status === 'accepted') && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-2 mb-4">
+                <Mail className="w-4 h-4 text-green-600" />
+                <h3 className="text-base font-bold text-gray-900">录用通知</h3>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-gray-500">发送状态</p>
+                  <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                    已发送
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Offer薪资</p>
+                  <p className="text-sm text-gray-900">¥{offer.salary.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">入职日期</p>
+                  <p className="text-sm text-gray-900">{offer.startDate}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {relatedTasks.length > 0 && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-2 mb-4">
+                <ClipboardList className="w-4 h-4 text-purple-600" />
+                <h3 className="text-base font-bold text-gray-900">入职任务</h3>
+              </div>
+              <div className="space-y-3">
+                {relatedTasks.map((task) => {
+                  const typeLabel = task.type === 'workstation' ? '工位分配' : task.type === 'it_equipment' ? 'IT设备领用' : '入职培训'
+                  const statusLabel = task.status === 'completed' ? '已完成' : task.status === 'in_progress' ? '进行中' : '待办'
+                  const statusCls = task.status === 'completed' ? 'bg-green-100 text-green-700' : task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                  return (
+                    <div key={task.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{typeLabel}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{task.assignee} · {task.details}</p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusCls}`}>{statusLabel}</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

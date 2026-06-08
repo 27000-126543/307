@@ -58,7 +58,7 @@ export default function OfferList() {
     addBackgroundCheck({
       id: `bc_${Date.now()}`,
       offerId,
-      company: resumes.find((r) => r.id === form.resumeId)?.name || '',
+      company: '诚信背调有限公司',
       status: 'pending',
     })
     setShowModal(false)
@@ -139,7 +139,7 @@ export default function OfferList() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => navigate(`/offers/${offer.id}`)}
+                        onClick={() => navigate(`/offer/${offer.id}`)}
                         className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                         title="查看详情"
                       >

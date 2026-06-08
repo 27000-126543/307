@@ -104,10 +104,10 @@ export default function InterviewList() {
         updateInterview(interview.id, { status: 'confirmed' })
         break
       case 'adjustment_requested':
-        navigate(`/interviews/${interview.id}`)
+        navigate(`/interview/${interview.id}`)
         break
       case 'completed':
-        navigate(`/interviews/${interview.id}`)
+        navigate(`/interview/${interview.id}`)
         break
     }
   }
@@ -336,7 +336,7 @@ export default function InterviewList() {
                       {dayInterviews.map((interview) => (
                         <div
                           key={interview.id}
-                          onClick={() => navigate(`/interviews/${interview.id}`)}
+                          onClick={() => navigate(`/interview/${interview.id}`)}
                           className={`rounded-md border-l-3 px-2 py-1.5 cursor-pointer hover:shadow-sm transition-shadow ${CALENDAR_COLORS[interview.priority]}`}
                           style={{ borderLeftWidth: '3px' }}
                         >

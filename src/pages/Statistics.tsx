@@ -41,7 +41,7 @@ const STATUS_COLORS: Record<string, string> = {
 type DateRange = 'month' | 'quarter' | 'year'
 
 export default function Statistics() {
-  const { resumes, jobs, interviews, offers } = useRecruitStore()
+  const { resumes, jobs, interviews, offers, onboardingTasks } = useRecruitStore()
   const [selectedDept, setSelectedDept] = useState('全部部门')
   const [dateRange, setDateRange] = useState<DateRange>('month')
 
@@ -50,14 +50,37 @@ export default function Statistics() {
     return ['全部部门', ...Array.from(depts)]
   }, [jobs])
 
+  const getDateRange = useMemo(() => {
+    const now = new Date()
+    let start: Date
+    let end: Date
+    if (dateRange === 'month') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1)
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    } else if (dateRange === 'quarter') {
+      const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3
+      start = new Date(now.getFullYear(), quarterStartMonth, 1)
+      end = new Date(now.getFullYear(), quarterStartMonth + 3, 1)
+    } else {
+      start = new Date(now.getFullYear(), 0, 1)
+      end = new Date(now.getFullYear() + 1, 0, 1)
+    }
+    return { start, end }
+  }, [dateRange])
+
   const filteredResumes = useMemo(() => {
     let result = resumes
     if (selectedDept !== '全部部门') {
       const jobIds = new Set(jobs.filter((j) => j.department === selectedDept).map((j) => j.id))
       result = result.filter((r) => r.matchedJobId && jobIds.has(r.matchedJobId))
     }
+    const { start, end } = getDateRange
+    result = result.filter((r) => {
+      const d = new Date(r.createdAt)
+      return d >= start && d < end
+    })
     return result
-  }, [resumes, jobs, selectedDept])
+  }, [resumes, jobs, selectedDept, getDateRange])
 
   const filteredInterviews = useMemo(() => {
     let result = interviews
@@ -65,8 +88,13 @@ export default function Statistics() {
       const jobIds = new Set(jobs.filter((j) => j.department === selectedDept).map((j) => j.id))
       result = result.filter((i) => jobIds.has(i.jobId))
     }
+    const { start, end } = getDateRange
+    result = result.filter((i) => {
+      const d = new Date(i.scheduledAt)
+      return d >= start && d < end
+    })
     return result
-  }, [interviews, jobs, selectedDept])
+  }, [interviews, jobs, selectedDept, getDateRange])
 
   const filteredOffers = useMemo(() => {
     let result = offers
@@ -74,8 +102,13 @@ export default function Statistics() {
       const jobIds = new Set(jobs.filter((j) => j.department === selectedDept).map((j) => j.id))
       result = result.filter((o) => jobIds.has(o.jobId))
     }
+    const { start, end } = getDateRange
+    result = result.filter((o) => {
+      const d = new Date(o.createdAt)
+      return d >= start && d < end
+    })
     return result
-  }, [offers, jobs, selectedDept])
+  }, [offers, jobs, selectedDept, getDateRange])
 
   const stats = useMemo(() => {
     const totalResumes = filteredResumes.length
@@ -85,12 +118,16 @@ export default function Statistics() {
     )
     const interviewPassRate = completedInterviews.length > 0 ? Math.round((passedInterviews.length / completedInterviews.length) * 100) : 0
     const validOffers = filteredOffers.filter((o) => o.status !== 'rejected')
-    const acceptedOffers = validOffers.filter((o) => o.status === 'sent' || o.status === 'accepted')
+    const acceptedOffers = validOffers.filter((o) => o.status === 'accepted')
     const offerAcceptRate = validOffers.length > 0 ? Math.round((acceptedOffers.length / validOffers.length) * 100) : 0
-    const hiredOffers = filteredOffers.filter((o) => o.status === 'sent' || o.status === 'accepted')
-    const onboardRate = filteredOffers.length > 0 ? Math.round((hiredOffers.length / filteredOffers.length) * 100) : 0
+    const sentOfferIds = new Set(filteredOffers.filter((o) => o.status === 'sent' || o.status === 'accepted').map((o) => o.id))
+    const onboardedCount = onboardingTasks.filter(
+      (t) => sentOfferIds.has(t.offerId) && t.type === 'workstation' && t.status === 'completed'
+    ).length
+    const totalSent = sentOfferIds.size
+    const onboardRate = totalSent > 0 ? Math.round((onboardedCount / totalSent) * 100) : 0
     return { totalResumes, interviewPassRate, offerAcceptRate, onboardRate }
-  }, [filteredResumes, filteredInterviews, filteredOffers])
+  }, [filteredResumes, filteredInterviews, filteredOffers, onboardingTasks])
 
   const deptBarData = useMemo(() => {
     const jobDeptMap = Object.fromEntries(jobs.map((j) => [j.id, j.department]))

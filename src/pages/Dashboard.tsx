@@ -118,7 +118,7 @@ export default function Dashboard() {
                 key={todo.id}
                 className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                 onClick={() => {
-                  if (todo.type === 'screening') navigate(`/resumes/${todo.targetId}`)
+                  if (todo.type === 'screening') navigate(`/resume/${todo.targetId}`)
                   else if (todo.type === 'interview') navigate('/interviews')
                   else if (todo.type === 'offer') navigate('/offers')
                   else navigate('/screening')
@@ -185,7 +185,7 @@ export default function Dashboard() {
         <h2 className="text-lg font-semibold text-gray-900 mb-4">快捷操作</h2>
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={() => navigate('/resumes/new')}
+            onClick={() => navigate('/resumes')}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
