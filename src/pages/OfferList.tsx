@@ -12,6 +12,7 @@ const STATUS_MAP: Record<OfferStatus, { label: string; className: string }> = {
   sent: { label: '已发送', className: 'bg-green-100 text-green-700' },
   accepted: { label: '已接受', className: 'bg-emerald-100 text-emerald-700' },
   declined: { label: '已拒绝', className: 'bg-red-100 text-red-700' },
+  negotiating: { label: '协商中', className: 'bg-amber-100 text-amber-700' },
 }
 
 const APPROVAL_MAP: Record<string, { label: string; className: string }> = {

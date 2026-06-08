@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, X, Briefcase } from 'lucide-react'
+import { ArrowLeft, Check, X, Briefcase, FileText, UserCheck, MessageSquare, ClipboardList, Clock } from 'lucide-react'
 import { useRecruitStore } from '@/stores/recruitStore'
 
 const STATUS_LABEL_MAP: Record<string, string> = {
@@ -44,10 +44,20 @@ function getTextColor(score: number): string {
   return 'text-red-600'
 }
 
+interface TimelineNode {
+  key: string
+  label: string
+  icon: React.ReactNode
+  done: boolean
+  time?: string
+  detail?: string
+  linkTo?: string
+}
+
 export default function ResumeDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { resumes, jobs, confirmResume, rejectResume } = useRecruitStore()
+  const { resumes, jobs, interviews, offers, onboardingTasks, interviewers, confirmResume, rejectResume } = useRecruitStore()
   const [showRejectInput, setShowRejectInput] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
 
@@ -66,6 +76,12 @@ export default function ResumeDetail() {
   }
 
   const matchedJob = resume.matchedJobId ? jobs.find((j) => j.id === resume.matchedJobId) : null
+  const relatedInterviews = interviews.filter((i) => i.resumeId === resume.id)
+  const relatedOffers = offers.filter((o) => o.resumeId === resume.id)
+  const relatedOnboardingTasks = onboardingTasks.filter((t) => {
+    const offer = relatedOffers.find((o) => o.id === t.offerId)
+    return !!offer
+  })
 
   const handleReject = () => {
     if (!rejectReason.trim()) return
@@ -76,6 +92,138 @@ export default function ResumeDetail() {
 
   const showConfirmRecommend = resume.status === 'pending' || resume.status === 'screened'
   const showSupervisorConfirm = resume.status === 'recommended'
+
+  const timeline: TimelineNode[] = useMemo(() => {
+    const nodes: TimelineNode[] = []
+    nodes.push({
+      key: 'entry',
+      label: '简历录入',
+      icon: <FileText className="w-4 h-4" />,
+      done: true,
+      time: resume.createdAt,
+      detail: `${resume.name} · ${resume.education} · ${resume.experienceYears}年经验`,
+    })
+    const hasScreening = resume.screeningScore > 0
+    nodes.push({
+      key: 'screening',
+      label: '初筛评分',
+      icon: <Clock className="w-4 h-4" />,
+      done: hasScreening || ['screened', 'recommended', 'confirmed', 'interviewing', 'offered', 'hired'].includes(resume.status),
+      detail: hasScreening ? `综合评分 ${resume.screeningScore} 分${matchedJob ? ` · 匹配岗位：${matchedJob.title}` : ''}` : undefined,
+    })
+    const isRecommended = ['recommended', 'confirmed', 'interviewing', 'offered', 'hired'].includes(resume.status)
+    nodes.push({
+      key: 'recommend',
+      label: '推荐给主管',
+      icon: <UserCheck className="w-4 h-4" />,
+      done: isRecommended,
+      detail: isRecommended ? '已推荐至招聘主管' : undefined,
+    })
+    const isConfirmed = ['confirmed', 'interviewing', 'offered', 'hired'].includes(resume.status)
+    nodes.push({
+      key: 'confirm',
+      label: '主管确认',
+      icon: <Check className="w-4 h-4" />,
+      done: isConfirmed,
+      detail: isConfirmed ? '主管已确认通过' : undefined,
+    })
+    if (relatedInterviews.length > 0) {
+      const firstInterview = relatedInterviews[0]
+      const interviewerName = interviewers.find((iv) => iv.id === firstInterview.interviewerId)?.name || ''
+      nodes.push({
+        key: 'interview',
+        label: '面试安排',
+        icon: <Briefcase className="w-4 h-4" />,
+        done: true,
+        time: new Date(firstInterview.scheduledAt).toLocaleString('zh-CN'),
+        detail: `面试官：${interviewerName} · ${firstInterview.duration}分钟`,
+        linkTo: `/interview/${firstInterview.id}`,
+      })
+    } else if (isConfirmed) {
+      nodes.push({
+        key: 'interview',
+        label: '面试安排',
+        icon: <Briefcase className="w-4 h-4" />,
+        done: false,
+        detail: '待安排面试',
+      })
+    }
+    const completedInterview = relatedInterviews.find((i) => i.status === 'completed' && i.evaluation)
+    if (completedInterview?.evaluation) {
+      nodes.push({
+        key: 'evaluation',
+        label: '面试评价',
+        icon: <MessageSquare className="w-4 h-4" />,
+        done: true,
+        time: completedInterview.evaluation.evaluatedAt ? new Date(completedInterview.evaluation.evaluatedAt).toLocaleString('zh-CN') : undefined,
+        detail: `评分：${completedInterview.evaluation.score} · ${completedInterview.evaluation.comment}`,
+        linkTo: `/interview/${completedInterview.id}`,
+      })
+    }
+    const mainOffer = relatedOffers[0]
+    if (mainOffer) {
+      const approvalSteps: string[] = []
+      if (mainOffer.hrManagerApproval === 'approved') approvalSteps.push('HR已批')
+      if (mainOffer.gmApproval === 'approved') approvalSteps.push('总经理已批')
+      if (mainOffer.status === 'sent' || mainOffer.status === 'accepted' || mainOffer.status === 'declined' || mainOffer.status === 'negotiating') approvalSteps.push('已发送')
+      nodes.push({
+        key: 'offer',
+        label: 'Offer审批',
+        icon: <FileText className="w-4 h-4" />,
+        done: mainOffer.status !== 'pending',
+        time: new Date(mainOffer.createdAt).toLocaleString('zh-CN'),
+        detail: approvalSteps.length > 0 ? approvalSteps.join(' → ') : '审批中',
+        linkTo: `/offer/${mainOffer.id}`,
+      })
+      if (['sent', 'accepted', 'declined', 'negotiating'].includes(mainOffer.status)) {
+        const feedbackLabel = mainOffer.status === 'accepted' ? '候选人已接受' : mainOffer.status === 'declined' ? '候选人已拒绝' : mainOffer.status === 'negotiating' ? '协商中' : '等待候选人反馈'
+        nodes.push({
+          key: 'feedback',
+          label: '候选人反馈',
+          icon: <MessageSquare className="w-4 h-4" />,
+          done: mainOffer.status !== 'sent',
+          detail: feedbackLabel + (mainOffer.rejectionReason ? ` · 原因：${mainOffer.rejectionReason}` : '') + (mainOffer.candidateNote ? ` · 备注：${mainOffer.candidateNote}` : ''),
+          linkTo: `/offer/${mainOffer.id}`,
+        })
+      }
+    } else if (resume.status === 'offered') {
+      nodes.push({
+        key: 'offer',
+        label: 'Offer',
+        icon: <FileText className="w-4 h-4" />,
+        done: true,
+        detail: '已发Offer（暂无审批记录）',
+      })
+    }
+    if (relatedOnboardingTasks.length > 0) {
+      const completedTasks = relatedOnboardingTasks.filter((t) => t.status === 'completed')
+      nodes.push({
+        key: 'onboarding',
+        label: '入职准备',
+        icon: <ClipboardList className="w-4 h-4" />,
+        done: completedTasks.length === relatedOnboardingTasks.length,
+        detail: `已完成 ${completedTasks.length}/${relatedOnboardingTasks.length} 项任务`,
+      })
+    } else if (resume.status === 'hired') {
+      nodes.push({
+        key: 'onboarding',
+        label: '入职',
+        icon: <ClipboardList className="w-4 h-4" />,
+        done: true,
+        detail: '已入职',
+      })
+    }
+    if (resume.status === 'rejected') {
+      nodes.push({
+        key: 'rejected',
+        label: '已驳回',
+        icon: <X className="w-4 h-4" />,
+        done: true,
+        detail: resume.rejectedReason || '未填写原因',
+      })
+    }
+    return nodes
+  }, [resume, relatedInterviews, relatedOffers, relatedOnboardingTasks, matchedJob])
 
   return (
     <div className="p-6 space-y-6">
@@ -117,6 +265,46 @@ export default function ResumeDetail() {
             驳回原因：{resume.rejectedReason}
           </div>
         )}
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
+          <Clock className="w-5 h-5 text-brand-500" />
+          招聘进度
+        </h2>
+        <div className="relative">
+          <div className="absolute left-[11px] top-3 bottom-3 w-px bg-gray-200" />
+          <div className="space-y-6">
+            {timeline.map((node, idx) => (
+              <div key={node.key} className="relative flex items-start gap-4 pl-1">
+                <div className={`flex items-center justify-center w-6 h-6 rounded-full border-2 shrink-0 z-10 ${
+                  node.done
+                    ? 'bg-green-500 border-green-500 text-white'
+                    : 'bg-white border-gray-300 text-gray-400'
+                }`}>
+                  {node.done ? <Check className="w-3.5 h-3.5" /> : <span className="w-2 h-2 rounded-full bg-gray-300" />}
+                </div>
+                <div className="flex-1 min-w-0 pb-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-semibold ${node.done ? 'text-gray-900' : 'text-gray-500'}`}>{node.label}</span>
+                    {node.time && <span className="text-xs text-gray-400">{node.time}</span>}
+                    {idx > 0 && node.done && timeline[idx - 1].done && (
+                      <span className="text-xs text-green-500">✓</span>
+                    )}
+                  </div>
+                  {node.detail && (
+                    <button
+                      onClick={() => node.linkTo ? navigate(node.linkTo) : undefined}
+                      className={`text-xs mt-1 block ${node.linkTo ? 'text-blue-600 hover:text-blue-800 cursor-pointer' : 'text-gray-500'}`}
+                    >
+                      {node.detail}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {resume.screeningScore > 0 && (

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Calendar, List, Filter, Zap, Clock, MapPin, Users, Play, Check, AlertCircle, Eye, Plus, X } from 'lucide-react'
+import { Calendar, List, Filter, Zap, Clock, MapPin, Users, Play, Check, AlertCircle, Eye, Plus, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRecruitStore } from '@/stores/recruitStore'
 import { autoScheduleInterviews, checkConflicts } from '@/utils/scheduler'
 import type { InterviewPriority, InterviewStatus } from '@/types'
@@ -45,11 +45,30 @@ const CALENDAR_COLORS: Record<InterviewPriority, string> = {
   low: 'bg-gray-200 border-gray-400',
 }
 
+const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
+function getMonday(d: Date): Date {
+  const date = new Date(d)
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7))
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
 export default function InterviewList() {
   const navigate = useNavigate()
   const { interviews, resumes, jobs, interviewers, meetingRooms, addInterview, updateInterview } = useRecruitStore()
 
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
+  const [calendarView, setCalendarView] = useState<'week' | 'month'>('week')
+  const [calendarBaseDate, setCalendarBaseDate] = useState(() => new Date())
   const [priorityFilter, setPriorityFilter] = useState<InterviewPriority | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<InterviewStatus | 'all'>('all')
   const [scheduling, setScheduling] = useState(false)
@@ -57,6 +76,9 @@ export default function InterviewList() {
   const [showNewForm, setShowNewForm] = useState(false)
   const [newForm, setNewForm] = useState({ resumeId: '', interviewerId: '', roomId: '', scheduledAt: '', duration: 60, priority: 'normal' as InterviewPriority })
   const [newFormError, setNewFormError] = useState('')
+  const [editInterviewId, setEditInterviewId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ interviewerId: '', roomId: '', scheduledAt: '', duration: 60 })
+  const [editFormError, setEditFormError] = useState('')
 
   const filtered = useMemo(() => {
     return interviews.filter((i) => {
@@ -139,35 +161,77 @@ export default function InterviewList() {
   }
 
   const calendarDays = useMemo(() => {
-    const today = new Date()
-    const monday = new Date(today)
-    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7))
     const days: Date[] = []
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday)
-      d.setDate(monday.getDate() + i)
-      days.push(d)
+    if (calendarView === 'week') {
+      const monday = getMonday(calendarBaseDate)
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday)
+        d.setDate(monday.getDate() + i)
+        days.push(d)
+      }
+    } else {
+      const year = calendarBaseDate.getFullYear()
+      const month = calendarBaseDate.getMonth()
+      const firstDay = new Date(year, month, 1)
+      const lastDay = new Date(year, month + 1, 0)
+      const startMonday = getMonday(firstDay)
+      const endSunday = new Date(startMonday)
+      endSunday.setDate(startMonday.getDate() + 41)
+      const d = new Date(startMonday)
+      while (d <= endSunday) {
+        days.push(new Date(d))
+        d.setDate(d.getDate() + 1)
+      }
     }
     return days
-  }, [])
-
-  const dayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+  }, [calendarBaseDate, calendarView])
 
   const calendarInterviews = useMemo(() => {
     const map: Record<string, typeof filtered> = {}
     for (const day of calendarDays) {
-      const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
+      const key = dateKey(day)
       map[key] = filtered.filter((i) => {
         const d = new Date(i.scheduledAt)
-        return d.getFullYear() === day.getFullYear() && d.getMonth() === day.getMonth() && d.getDate() === day.getDate()
+        return isSameDay(d, day)
       })
     }
     return map
   }, [filtered, calendarDays])
 
-  const isToday = (d: Date) => {
-    const now = new Date()
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+  const calendarLabel = useMemo(() => {
+    if (calendarView === 'week') {
+      const monday = getMonday(calendarBaseDate)
+      const sunday = new Date(monday)
+      sunday.setDate(monday.getDate() + 6)
+      return `${monday.getFullYear()}年${monday.getMonth() + 1}月${monday.getDate()}日 - ${sunday.getMonth() + 1}月${sunday.getDate()}日`
+    }
+    return `${calendarBaseDate.getFullYear()}年${calendarBaseDate.getMonth() + 1}月`
+  }, [calendarBaseDate, calendarView])
+
+  const navigateCalendar = (direction: number) => {
+    const d = new Date(calendarBaseDate)
+    if (calendarView === 'week') {
+      d.setDate(d.getDate() + direction * 7)
+    } else {
+      d.setMonth(d.getMonth() + direction)
+    }
+    setCalendarBaseDate(d)
+  }
+
+  const jumpToDate = (targetDate: Date) => {
+    setCalendarBaseDate(targetDate)
+  }
+
+  const isToday = (d: Date) => isSameDay(d, new Date())
+
+  const isCurrentMonth = (d: Date) => d.getMonth() === calendarBaseDate.getMonth()
+
+  const openEditForm = (interview: typeof interviews[0]) => {
+    const dt = new Date(interview.scheduledAt)
+    const localStr = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}T${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`
+    setEditForm({ interviewerId: interview.interviewerId, roomId: interview.roomId, scheduledAt: localStr, duration: interview.duration })
+    setEditInterviewId(interview.id)
+    setEditFormError('')
   }
 
   return (
@@ -340,7 +404,7 @@ export default function InterviewList() {
                         setNewFormError('该候选人尚未匹配岗位，无法安排面试')
                         return
                       }
-                      const scheduledAt = newForm.scheduledAt.includes('T') ? newForm.scheduledAt : `${newForm.scheduledAt}T00:00`
+                      const scheduledAt = newForm.scheduledAt
                       const conflicts = checkConflicts(
                         { interviewerId: newForm.interviewerId, roomId: newForm.roomId, scheduledAt, duration: newForm.duration },
                         interviews
@@ -367,6 +431,116 @@ export default function InterviewList() {
                       setShowNewForm(false)
                       setNewForm({ resumeId: '', interviewerId: '', roomId: '', scheduledAt: '', duration: 60, priority: 'normal' })
                       setNewFormError('')
+                      const newDate = new Date(scheduledAt)
+                      jumpToDate(newDate)
+                      if (viewMode !== 'calendar') setViewMode('calendar')
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    保存
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editInterviewId && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setEditInterviewId(null)}>
+            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-bold text-gray-900">改期 / 调整</h2>
+                <button onClick={() => setEditInterviewId(null)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">面试官</label>
+                  <select
+                    value={editForm.interviewerId}
+                    onChange={(e) => setEditForm({ ...editForm, interviewerId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  >
+                    {interviewers.map((iv) => (
+                      <option key={iv.id} value={iv.id}>{iv.name} · {iv.department} {iv.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">会议室</label>
+                  <select
+                    value={editForm.roomId}
+                    onChange={(e) => setEditForm({ ...editForm, roomId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  >
+                    {meetingRooms.map((mr) => (
+                      <option key={mr.id} value={mr.id}>{mr.name} · {mr.location}（{mr.capacity}人）</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">面试时间</label>
+                    <input
+                      type="datetime-local"
+                      value={editForm.scheduledAt}
+                      onChange={(e) => setEditForm({ ...editForm, scheduledAt: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">时长（分钟）</label>
+                    <select
+                      value={editForm.duration}
+                      onChange={(e) => setEditForm({ ...editForm, duration: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    >
+                      <option value={30}>30分钟</option>
+                      <option value={60}>60分钟</option>
+                      <option value={90}>90分钟</option>
+                      <option value={120}>120分钟</option>
+                    </select>
+                  </div>
+                </div>
+                {editFormError && (
+                  <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    <span className="text-sm text-red-700">{editFormError}</span>
+                  </div>
+                )}
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => setEditInterviewId(null)}
+                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!editForm.interviewerId || !editForm.roomId || !editForm.scheduledAt) {
+                        setEditFormError('请填写完整信息')
+                        return
+                      }
+                      const conflicts = checkConflicts(
+                        { id: editInterviewId!, interviewerId: editForm.interviewerId, roomId: editForm.roomId, scheduledAt: editForm.scheduledAt, duration: editForm.duration },
+                        interviews
+                      )
+                      const conflictMsgs: string[] = []
+                      if (conflicts.interviewerConflict) conflictMsgs.push('面试官时间冲突')
+                      if (conflicts.roomConflict) conflictMsgs.push('会议室时间冲突')
+                      if (conflictMsgs.length > 0) {
+                        setEditFormError(`无法保存：${conflictMsgs.join('、')}，请调整面试官、会议室或时间`)
+                        return
+                      }
+                      updateInterview(editInterviewId!, {
+                        interviewerId: editForm.interviewerId,
+                        roomId: editForm.roomId,
+                        scheduledAt: editForm.scheduledAt,
+                        duration: editForm.duration,
+                      })
+                      setEditInterviewId(null)
+                      jumpToDate(new Date(editForm.scheduledAt))
                     }}
                     className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
                   >
@@ -499,15 +673,26 @@ export default function InterviewList() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {actionBtn && (
-                            <button
-                              onClick={() => handleAction(interview)}
-                              className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg transition-colors ${actionBtn.className}`}
-                            >
-                              {actionBtn.icon}
-                              {actionBtn.label}
-                            </button>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {actionBtn && (
+                              <button
+                                onClick={() => handleAction(interview)}
+                                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg transition-colors ${actionBtn.className}`}
+                              >
+                                {actionBtn.icon}
+                                {actionBtn.label}
+                              </button>
+                            )}
+                            {interview.status !== 'completed' && interview.status !== 'cancelled' && (
+                              <button
+                                onClick={() => openEditForm(interview)}
+                                className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                                title="改期/调整"
+                              >
+                                改期
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -517,58 +702,143 @@ export default function InterviewList() {
             </table>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="grid grid-cols-7 border-b border-gray-100">
-              {calendarDays.map((day, idx) => (
-                <div
-                  key={idx}
-                  className={`text-center py-3 text-sm font-medium ${
-                    isToday(day) ? 'bg-blue-50 text-blue-700' : 'text-gray-500 bg-gray-50'
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigateCalendar(-1)}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="text-sm font-medium text-gray-800 min-w-[200px] text-center">{calendarLabel}</span>
+                <button
+                  onClick={() => navigateCalendar(1)}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setCalendarBaseDate(new Date())}
+                  className="ml-2 px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  今天
+                </button>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCalendarView('week')}
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                    calendarView === 'week' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'
                   }`}
                 >
-                  <div>{dayLabels[idx]}</div>
-                  <div className={`text-lg ${isToday(day) ? 'font-bold' : ''}`}>
-                    {day.getDate()}
-                  </div>
-                </div>
-              ))}
+                  周
+                </button>
+                <button
+                  onClick={() => setCalendarView('month')}
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                    calendarView === 'month' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+                >
+                  月
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-7 min-h-[400px]">
-              {calendarDays.map((day, idx) => {
-                const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
-                const dayInterviews = calendarInterviews[key] || []
-                return (
-                  <div
-                    key={idx}
-                    className={`border-r border-gray-100 p-2 last:border-r-0 ${
-                      isToday(day) ? 'bg-blue-50/30' : ''
-                    }`}
-                  >
-                    <div className="space-y-1.5">
-                      {dayInterviews.map((interview) => (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              {calendarView === 'week' ? (
+                <>
+                  <div className="grid grid-cols-7 border-b border-gray-100">
+                    {DAY_LABELS.map((label, idx) => {
+                      const day = calendarDays[idx]
+                      return (
                         <div
-                          key={interview.id}
-                          onClick={() => navigate(`/interview/${interview.id}`)}
-                          className={`rounded-md border-l-3 px-2 py-1.5 cursor-pointer hover:shadow-sm transition-shadow ${CALENDAR_COLORS[interview.priority]}`}
-                          style={{ borderLeftWidth: '3px' }}
+                          key={idx}
+                          className={`text-center py-3 text-sm font-medium ${isToday(day) ? 'bg-blue-50 text-blue-700' : 'text-gray-500 bg-gray-50'}`}
                         >
-                          <div className="text-xs font-medium text-gray-800 truncate">
-                            {getResumeName(interview.resumeId)}
-                          </div>
-                          <div className="flex items-center gap-1 text-[10px] text-gray-500 mt-0.5">
-                            <Clock className="w-2.5 h-2.5" />
-                            {formatTime(interview.scheduledAt).split(' ')[1]}
-                          </div>
-                          <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                            <MapPin className="w-2.5 h-2.5" />
-                            {getRoomName(interview.roomId)}
+                          <div>{label}</div>
+                          <div className={`text-lg ${isToday(day) ? 'font-bold' : ''}`}>{day.getDate()}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="grid grid-cols-7 min-h-[400px]">
+                    {calendarDays.map((day, idx) => {
+                      const key = dateKey(day)
+                      const dayInterviews = calendarInterviews[key] || []
+                      return (
+                        <div
+                          key={idx}
+                          className={`border-r border-gray-100 p-2 last:border-r-0 ${isToday(day) ? 'bg-blue-50/30' : ''}`}
+                        >
+                          <div className="space-y-1.5">
+                            {dayInterviews.map((interview) => (
+                              <div
+                                key={interview.id}
+                                onClick={() => openEditForm(interview)}
+                                className={`rounded-md border-l-3 px-2 py-1.5 cursor-pointer hover:shadow-sm transition-shadow ${CALENDAR_COLORS[interview.priority]}`}
+                                style={{ borderLeftWidth: '3px' }}
+                              >
+                                <div className="text-xs font-medium text-gray-800 truncate">
+                                  {getResumeName(interview.resumeId)}
+                                </div>
+                                <div className="flex items-center gap-1 text-[10px] text-gray-500 mt-0.5">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  {formatTime(interview.scheduledAt).split(' ')[1]}
+                                </div>
+                                <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                                  <MapPin className="w-2.5 h-2.5" />
+                                  {getRoomName(interview.roomId)}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      )
+                    })}
                   </div>
-                )
-              })}
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-7 border-b border-gray-100">
+                    {DAY_LABELS.map((label) => (
+                      <div key={label} className="text-center py-2 text-xs font-medium text-gray-500 bg-gray-50">
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7">
+                    {calendarDays.map((day, idx) => {
+                      const key = dateKey(day)
+                      const dayInterviews = calendarInterviews[key] || []
+                      const inMonth = isCurrentMonth(day)
+                      return (
+                        <div
+                          key={idx}
+                          className={`border-r border-b border-gray-50 p-1 min-h-[80px] ${!inMonth ? 'bg-gray-50/50' : ''} ${isToday(day) ? 'bg-blue-50/30' : ''}`}
+                        >
+                          <div className={`text-xs mb-1 ${isToday(day) ? 'text-blue-600 font-bold' : inMonth ? 'text-gray-700' : 'text-gray-400'}`}>
+                            {day.getDate()}
+                          </div>
+                          <div className="space-y-0.5">
+                            {dayInterviews.slice(0, 3).map((interview) => (
+                              <div
+                                key={interview.id}
+                                onClick={() => openEditForm(interview)}
+                                className={`rounded px-1 py-0.5 text-[10px] cursor-pointer hover:shadow-sm transition-shadow truncate ${CALENDAR_COLORS[interview.priority]}`}
+                              >
+                                {getResumeName(interview.resumeId)} {formatTime(interview.scheduledAt).split(' ')[1]}
+                              </div>
+                            ))}
+                            {dayInterviews.length > 3 && (
+                              <div className="text-[10px] text-gray-400 pl-1">+{dayInterviews.length - 3}场</div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

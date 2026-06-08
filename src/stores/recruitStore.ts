@@ -40,6 +40,7 @@ interface RecruitStore {
   sendOffer: (id: string) => void
   acceptOffer: (id: string) => void
   declineOffer: (id: string, reason: string) => void
+  negotiateOffer: (id: string, note: string) => void
 
   addBackgroundCheck: (check: BackgroundCheck) => void
   updateBackgroundCheck: (id: string, data: Partial<BackgroundCheck>) => void
@@ -199,6 +200,9 @@ export const useRecruitStore = create<RecruitStore>()(
       declineOffer: (id, reason) => set((s) => ({
         offers: s.offers.map((o) => (o.id === id ? { ...o, status: 'declined' as const, rejectionReason: reason } : o)),
         todos: s.todos.filter((t) => !(t.targetId === id && t.type === 'offer')),
+      })),
+      negotiateOffer: (id, note) => set((s) => ({
+        offers: s.offers.map((o) => (o.id === id ? { ...o, status: 'negotiating' as const, candidateNote: note } : o)),
       })),
 
       addBackgroundCheck: (check) => set((s) => ({ backgroundChecks: [...s.backgroundChecks, check] })),

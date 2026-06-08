@@ -10,7 +10,7 @@ export type InterviewPriority = 'urgent' | 'high' | 'normal' | 'low'
 
 export type RecommendationLevel = 'strongly_recommend' | 'recommend' | 'neutral' | 'not_recommend'
 
-export type OfferStatus = 'pending' | 'hr_approved' | 'gm_approved' | 'rejected' | 'sent' | 'accepted' | 'declined'
+export type OfferStatus = 'pending' | 'hr_approved' | 'gm_approved' | 'rejected' | 'sent' | 'accepted' | 'declined' | 'negotiating'
 
 export type ApprovalAction = 'approved' | 'rejected'
 
@@ -104,6 +104,7 @@ export interface Offer {
   gmApproval: 'pending' | 'approved' | 'rejected'
   createdAt: string
   rejectionReason?: string
+  candidateNote?: string
 }
 
 export interface BackgroundCheck {

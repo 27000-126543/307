@@ -11,6 +11,7 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
   sent: { label: '已发送', className: 'bg-green-100 text-green-700' },
   accepted: { label: '已接受', className: 'bg-emerald-100 text-emerald-700' },
   declined: { label: '已拒绝', className: 'bg-red-100 text-red-700' },
+  negotiating: { label: '协商中', className: 'bg-amber-100 text-amber-700' },
 }
 
 const BC_STATUS_MAP: Record<string, { label: string; className: string }> = {
@@ -23,11 +24,13 @@ const BC_STATUS_MAP: Record<string, { label: string; className: string }> = {
 export default function OfferDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { offers, resumes, jobs, approvalRecords, backgroundChecks, onboardingTasks, acceptOffer, declineOffer, approveOfferHR, rejectOfferHR, approveOfferGM, rejectOfferGM } = useRecruitStore()
+  const { offers, resumes, jobs, approvalRecords, backgroundChecks, onboardingTasks, acceptOffer, declineOffer, negotiateOffer, approveOfferHR, rejectOfferHR, approveOfferGM, rejectOfferGM } = useRecruitStore()
   const [showDeclineInput, setShowDeclineInput] = useState(false)
   const [declineReason, setDeclineReason] = useState('')
   const [showRejectInput, setShowRejectInput] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  const [showNegotiateInput, setShowNegotiateInput] = useState(false)
+  const [negotiateNote, setNegotiateNote] = useState('')
 
   const offer = offers.find((o) => o.id === id)
 
@@ -299,7 +302,7 @@ export default function OfferDetail() {
             </div>
           )}
 
-          {(offer.status === 'sent' || offer.status === 'accepted') && (
+          {(offer.status === 'sent' || offer.status === 'accepted' || offer.status === 'negotiating') && (
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
               <div className="flex items-center gap-2 mb-4">
                 <Mail className="w-4 h-4 text-green-600" />
@@ -308,8 +311,12 @@ export default function OfferDetail() {
               <div className="space-y-3">
                 <div>
                   <p className="text-xs text-gray-500">发送状态</p>
-                  <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${offer.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-green-100 text-green-700'}`}>
-                    {offer.status === 'accepted' ? '候选人已接受' : '已发送，等待候选人反馈'}
+                  <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                    offer.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' :
+                    offer.status === 'negotiating' ? 'bg-amber-100 text-amber-700' :
+                    'bg-green-100 text-green-700'
+                  }`}>
+                    {offer.status === 'accepted' ? '候选人已接受' : offer.status === 'negotiating' ? '协商中' : '已发送，等待候选人反馈'}
                   </span>
                 </div>
                 <div>
@@ -320,8 +327,14 @@ export default function OfferDetail() {
                   <p className="text-xs text-gray-500">入职日期</p>
                   <p className="text-sm text-gray-900">{offer.startDate}</p>
                 </div>
+                {offer.candidateNote && (
+                  <div>
+                    <p className="text-xs text-gray-500">候选人备注</p>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded-lg mt-1">{offer.candidateNote}</p>
+                  </div>
+                )}
               </div>
-              {offer.status === 'sent' && (
+              {(offer.status === 'sent' || offer.status === 'negotiating') && (
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <p className="text-xs text-gray-500 mb-3">候选人反馈</p>
                   <div className="flex gap-2">
@@ -330,16 +343,52 @@ export default function OfferDetail() {
                       className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
                     >
                       <CheckCircle className="w-4 h-4" />
-                      接受Offer
+                      接受
+                    </button>
+                    <button
+                      onClick={() => { setShowNegotiateInput(true); setNegotiateNote('') }}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors"
+                    >
+                      <Clock className="w-4 h-4" />
+                      协商中
                     </button>
                     <button
                       onClick={() => setShowDeclineInput(true)}
                       className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
                     >
                       <XCircle className="w-4 h-4" />
-                      拒绝Offer
+                      拒绝
                     </button>
                   </div>
+                  {showNegotiateInput && (
+                    <div className="mt-3 space-y-2">
+                      <textarea
+                        value={negotiateNote}
+                        onChange={(e) => setNegotiateNote(e.target.value)}
+                        placeholder="请输入协商备注..."
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-amber-400"
+                        rows={3}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            negotiateOffer(offer.id, negotiateNote.trim() || '候选人希望协商条件')
+                            setShowNegotiateInput(false)
+                            setNegotiateNote('')
+                          }}
+                          className="px-3 py-1.5 bg-amber-500 text-white text-xs font-medium rounded-lg hover:bg-amber-600 transition-colors"
+                        >
+                          确认协商中
+                        </button>
+                        <button
+                          onClick={() => { setShowNegotiateInput(false); setNegotiateNote('') }}
+                          className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {showDeclineInput && (
                     <div className="mt-3 space-y-2">
                       <textarea

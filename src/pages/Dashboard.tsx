@@ -197,14 +197,16 @@ export default function Dashboard() {
             const offer = offers.find((o) => o.id === t.offerId)
             return offer?.resumeId
           }).filter(Boolean))
+          const offeredStatusResumeIds = new Set(resumes.filter((r) => r.status === 'offered').map((r) => r.id))
+          const hiredStatusResumeIds = new Set(resumes.filter((r) => r.status === 'hired').map((r) => r.id))
 
           const FUNNEL_STAGES = [
             { key: 'pending', label: '简历录入', getResumes: () => resumes.filter((r) => r.status === 'pending') },
             { key: 'screened', label: '初筛通过', getResumes: () => resumes.filter((r) => ['screened', 'recommended'].includes(r.status)) },
             { key: 'confirmed', label: '主管确认', getResumes: () => resumes.filter((r) => r.status === 'confirmed' || r.status === 'interviewing') },
             { key: 'interviewing', label: '面试', getResumes: () => resumes.filter((r) => interviews.some((i) => i.resumeId === r.id)) },
-            { key: 'offered', label: 'Offer', getResumes: () => resumes.filter((r) => offerResumeIds.has(r.id)) },
-            { key: 'hired', label: '入职', getResumes: () => resumes.filter((r) => acceptedOfferResumeIds.has(r.id) || hiredResumeIds.has(r.id)) },
+            { key: 'offered', label: 'Offer', getResumes: () => resumes.filter((r) => offerResumeIds.has(r.id) || offeredStatusResumeIds.has(r.id)) },
+            { key: 'hired', label: '入职', getResumes: () => resumes.filter((r) => acceptedOfferResumeIds.has(r.id) || hiredResumeIds.has(r.id) || hiredStatusResumeIds.has(r.id)) },
           ]
           const stageData = FUNNEL_STAGES.map((stage) => {
             const stageResumes = stage.getResumes()

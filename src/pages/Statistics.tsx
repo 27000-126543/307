@@ -121,7 +121,7 @@ export default function Statistics() {
       (i) => i.evaluation && (i.evaluation.recommendation === 'strongly_recommend' || i.evaluation.recommendation === 'recommend')
     )
     const interviewPassRate = completedInterviews.length > 0 ? Math.round((passedInterviews.length / completedInterviews.length) * 100) : 0
-    const feedbackOffers = filteredOffers.filter((o) => o.status === 'sent' || o.status === 'accepted' || o.status === 'declined')
+    const feedbackOffers = filteredOffers.filter((o) => o.status === 'sent' || o.status === 'accepted' || o.status === 'declined' || o.status === 'negotiating')
     const acceptedOffers = feedbackOffers.filter((o) => o.status === 'accepted')
     const offerAcceptRate = feedbackOffers.length > 0 ? Math.round((acceptedOffers.length / feedbackOffers.length) * 100) : 0
     const sentOfferIds = new Set(filteredOffers.filter((o) => o.status === 'sent' || o.status === 'accepted').map((o) => o.id))
