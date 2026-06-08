@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useRecruitStore } from '@/stores/recruitStore'
 import { cn } from '@/lib/utils'
 import { useNavigate } from 'react-router-dom'
@@ -11,6 +12,8 @@ import {
   Plus,
   Clock,
   ArrowRight,
+  X,
+  Filter,
 } from 'lucide-react'
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -35,7 +38,8 @@ const STAT_CARDS = [
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { jobs, resumes, interviews, offers, todos } = useRecruitStore()
+  const { jobs, resumes, interviews, offers, onboardingTasks, todos } = useRecruitStore()
+  const [funnelStage, setFunnelStage] = useState<string | null>(null)
 
   const openJobs = jobs.filter((j) => j.status === 'open').length
   const pendingResumes = resumes.filter((r) => r.status === 'pending').length
@@ -119,8 +123,8 @@ export default function Dashboard() {
                 className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                 onClick={() => {
                   if (todo.type === 'screening') navigate(`/resume/${todo.targetId}`)
-                  else if (todo.type === 'interview') navigate('/interviews')
-                  else if (todo.type === 'offer') navigate('/offers')
+                  else if (todo.type === 'interview') navigate(`/interview/${todo.targetId}`)
+                  else if (todo.type === 'offer') navigate(`/offer/${todo.targetId}`)
                   else navigate('/screening')
                 }}
               >
@@ -179,6 +183,111 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Filter className="w-5 h-5 text-brand-500" />
+          <h2 className="text-lg font-semibold text-gray-900">招聘漏斗看板</h2>
+        </div>
+        {(() => {
+          const FUNNEL_STAGES = [
+            { key: 'pending', label: '简历录入', statuses: ['pending'] as const },
+            { key: 'screened', label: '初筛通过', statuses: ['screened', 'recommended'] as const },
+            { key: 'confirmed', label: '主管确认', statuses: ['confirmed'] as const },
+            { key: 'interviewing', label: '面试', statuses: ['interviewing'] as const },
+            { key: 'offered', label: 'Offer', statuses: ['offered'] as const },
+            { key: 'hired', label: '入职', statuses: ['hired'] as const },
+          ]
+          const stageCounts = FUNNEL_STAGES.map((stage) => {
+            const count = resumes.filter((r) => stage.statuses.includes(r.status)).length
+            return { ...stage, count }
+          })
+          const maxCount = Math.max(...stageCounts.map((s) => s.count), 1)
+          return (
+            <>
+              <div className="flex items-end gap-3">
+                {stageCounts.map((stage, idx) => {
+                  const widthPercent = Math.max((stage.count / maxCount) * 100, 8)
+                  const prevCount = idx > 0 ? stageCounts[idx - 1].count : stage.count
+                  const convRate = idx > 0 && prevCount > 0 ? Math.round((stage.count / prevCount) * 100) : null
+                  return (
+                    <div key={stage.key} className="flex-1 flex flex-col items-center">
+                      <button
+                        onClick={() => setFunnelStage(funnelStage === stage.key ? null : stage.key)}
+                        className={cn(
+                          'w-full flex flex-col items-center justify-end rounded-t-lg transition-all duration-200 cursor-pointer',
+                          funnelStage === stage.key ? 'ring-2 ring-brand-400 ring-offset-2' : 'hover:ring-1 hover:ring-brand-200',
+                        )}
+                        style={{ height: `${Math.max(widthPercent, 20)}px`, minHeight: '40px' }}
+                      >
+                        <span className="text-base font-bold text-white drop-shadow">{stage.count}</span>
+                      </button>
+                      <div className={cn(
+                        'w-full text-center py-2 rounded-b-lg text-xs font-medium',
+                        idx === 0 ? 'bg-blue-500 text-white' :
+                        idx === 1 ? 'bg-blue-400 text-white' :
+                        idx === 2 ? 'bg-green-500 text-white' :
+                        idx === 3 ? 'bg-purple-500 text-white' :
+                        idx === 4 ? 'bg-amber-500 text-white' :
+                        'bg-emerald-500 text-white',
+                      )}>
+                        {stage.label}
+                      </div>
+                      {convRate !== null && (
+                        <div className="text-xs text-gray-400 mt-1">{convRate}%</div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              {funnelStage && (() => {
+                const stage = stageCounts.find((s) => s.key === funnelStage)
+                if (!stage) return null
+                const stageResumes = resumes.filter((r) => stage.statuses.includes(r.status))
+                return (
+                  <div className="mt-4 border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-800">
+                        {stage.label}（{stageResumes.length}人）
+                      </h3>
+                      <button onClick={() => setFunnelStage(null)} className="text-gray-400 hover:text-gray-600">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {stageResumes.length === 0 ? (
+                      <div className="text-sm text-gray-400 text-center py-4">暂无候选人</div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {stageResumes.map((r) => {
+                          const job = r.matchedJobId ? jobs.find((j) => j.id === r.matchedJobId) : null
+                          return (
+                            <button
+                              key={r.id}
+                              onClick={() => navigate(`/resume/${r.id}`)}
+                              className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-brand-200 transition-colors text-left"
+                            >
+                              <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 text-sm font-bold shrink-0">
+                                {r.name.charAt(0)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-medium text-gray-900 truncate">{r.name}</div>
+                                <div className="text-xs text-gray-500 truncate">
+                                  {r.education} · {r.experienceYears}年经验{job ? ` · ${job.title}` : ''}
+                                </div>
+                              </div>
+                              <ArrowRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+            </>
+          )
+        })()}
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">

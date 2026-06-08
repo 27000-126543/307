@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, CheckCircle, XCircle, Clock, Shield, FileText, Mail, ClipboardList } from 'lucide-react'
 import { useRecruitStore } from '@/stores/recruitStore'
@@ -22,7 +23,9 @@ const BC_STATUS_MAP: Record<string, { label: string; className: string }> = {
 export default function OfferDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { offers, resumes, jobs, approvalRecords, backgroundChecks, onboardingTasks } = useRecruitStore()
+  const { offers, resumes, jobs, approvalRecords, backgroundChecks, onboardingTasks, acceptOffer, declineOffer } = useRecruitStore()
+  const [showDeclineInput, setShowDeclineInput] = useState(false)
+  const [declineReason, setDeclineReason] = useState('')
 
   const offer = offers.find((o) => o.id === id)
 
@@ -244,8 +247,8 @@ export default function OfferDetail() {
               <div className="space-y-3">
                 <div>
                   <p className="text-xs text-gray-500">发送状态</p>
-                  <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                    已发送
+                  <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${offer.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-green-100 text-green-700'}`}>
+                    {offer.status === 'accepted' ? '候选人已接受' : '已发送，等待候选人反馈'}
                   </span>
                 </div>
                 <div>
@@ -256,6 +259,76 @@ export default function OfferDetail() {
                   <p className="text-xs text-gray-500">入职日期</p>
                   <p className="text-sm text-gray-900">{offer.startDate}</p>
                 </div>
+              </div>
+              {offer.status === 'sent' && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-500 mb-3">候选人反馈</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => acceptOffer(offer.id)}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      接受Offer
+                    </button>
+                    <button
+                      onClick={() => setShowDeclineInput(true)}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      拒绝Offer
+                    </button>
+                  </div>
+                  {showDeclineInput && (
+                    <div className="mt-3 space-y-2">
+                      <textarea
+                        value={declineReason}
+                        onChange={(e) => setDeclineReason(e.target.value)}
+                        placeholder="请输入拒绝原因..."
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+                        rows={3}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            if (declineReason.trim()) {
+                              declineOffer(offer.id, declineReason.trim())
+                              setShowDeclineInput(false)
+                              setDeclineReason('')
+                            }
+                          }}
+                          disabled={!declineReason.trim()}
+                          className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                        >
+                          确认拒绝
+                        </button>
+                        <button
+                          onClick={() => { setShowDeclineInput(false); setDeclineReason('') }}
+                          className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {offer.status === 'declined' && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-2 mb-4">
+                <XCircle className="w-4 h-4 text-red-600" />
+                <h3 className="text-base font-bold text-gray-900">候选人已拒绝</h3>
+              </div>
+              <div className="space-y-3">
+                {offer.rejectionReason && (
+                  <div>
+                    <p className="text-xs text-gray-500">拒绝原因</p>
+                    <p className="text-sm text-red-600">{offer.rejectionReason}</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

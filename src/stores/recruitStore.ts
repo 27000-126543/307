@@ -38,6 +38,8 @@ interface RecruitStore {
   approveOfferGM: (id: string) => void
   rejectOfferGM: (id: string, reason: string) => void
   sendOffer: (id: string) => void
+  acceptOffer: (id: string) => void
+  declineOffer: (id: string, reason: string) => void
 
   addBackgroundCheck: (check: BackgroundCheck) => void
   updateBackgroundCheck: (id: string, data: Partial<BackgroundCheck>) => void
@@ -169,6 +171,26 @@ export const useRecruitStore = create<RecruitStore>()(
       })),
       sendOffer: (id) => set((s) => ({
         offers: s.offers.map((o) => (o.id === id ? { ...o, status: 'sent' as const } : o)),
+      })),
+      acceptOffer: (id) => set((s) => {
+        const offer = s.offers.find((o) => o.id === id)
+        if (!offer) return {}
+        const resume = s.resumes.find((r) => r.id === offer.resumeId)
+        return {
+          offers: s.offers.map((o) => (o.id === id ? { ...o, status: 'accepted' as const } : o)),
+          resumes: resume ? s.resumes.map((r) => (r.id === resume.id ? { ...r, status: 'hired' as const } : r)) : s.resumes,
+          onboardingTasks: [
+            ...s.onboardingTasks,
+            { id: `ot_${Date.now()}_ws`, offerId: id, candidateName: resume?.name || '', type: 'workstation' as const, status: 'pending' as const, assignee: '行政部-李莉', details: '待分配' },
+            { id: `ot_${Date.now()}_it`, offerId: id, candidateName: resume?.name || '', type: 'it_equipment' as const, status: 'pending' as const, assignee: 'IT部-张强', details: '待领用' },
+            { id: `ot_${Date.now()}_tr`, offerId: id, candidateName: resume?.name || '', type: 'training' as const, status: 'pending' as const, assignee: 'HR-王芳', details: '待安排' },
+          ],
+          todos: s.todos.filter((t) => !(t.targetId === id && t.type === 'offer')),
+        }
+      }),
+      declineOffer: (id, reason) => set((s) => ({
+        offers: s.offers.map((o) => (o.id === id ? { ...o, status: 'declined' as const, rejectionReason: reason } : o)),
+        todos: s.todos.filter((t) => !(t.targetId === id && t.type === 'offer')),
       })),
 
       addBackgroundCheck: (check) => set((s) => ({ backgroundChecks: [...s.backgroundChecks, check] })),

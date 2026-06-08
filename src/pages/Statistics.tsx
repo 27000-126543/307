@@ -23,8 +23,10 @@ const COLORS = ['#1E3A5F', '#D4A843', '#2D9B5A', '#D94452', '#E5A118', '#7C5CFC'
 const STATUS_LABELS: Record<string, string> = {
   pending: '待筛选',
   screened: '已筛选',
+  recommended: '推荐中',
   confirmed: '已确认',
   rejected: '已驳回',
+  interviewing: '面试中',
   offered: '已发Offer',
   hired: '已入职',
 }
@@ -32,9 +34,11 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   pending: '#E5A118',
   screened: '#1E3A5F',
+  recommended: '#3B82F6',
   confirmed: '#2D9B5A',
   rejected: '#D94452',
-  offered: '#7C5CFC',
+  interviewing: '#7C5CFC',
+  offered: '#A855F7',
   hired: '#4ECDC4',
 }
 
@@ -72,7 +76,7 @@ export default function Statistics() {
     let result = resumes
     if (selectedDept !== '全部部门') {
       const jobIds = new Set(jobs.filter((j) => j.department === selectedDept).map((j) => j.id))
-      result = result.filter((r) => r.matchedJobId && jobIds.has(r.matchedJobId))
+      result = result.filter((r) => !r.matchedJobId || jobIds.has(r.matchedJobId))
     }
     const { start, end } = getDateRange
     result = result.filter((r) => {
@@ -133,12 +137,8 @@ export default function Statistics() {
     const jobDeptMap = Object.fromEntries(jobs.map((j) => [j.id, j.department]))
     const deptCounts: Record<string, number> = {}
     for (const resume of filteredResumes) {
-      if (resume.matchedJobId) {
-        const dept = jobDeptMap[resume.matchedJobId]
-        if (dept) {
-          deptCounts[dept] = (deptCounts[dept] || 0) + 1
-        }
-      }
+      const dept = resume.matchedJobId ? (jobDeptMap[resume.matchedJobId] || '未匹配') : '待分配'
+      deptCounts[dept] = (deptCounts[dept] || 0) + 1
     }
     return Object.entries(deptCounts).map(([name, value]) => ({ name, value }))
   }, [filteredResumes, jobs])

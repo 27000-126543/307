@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Calendar, List, Filter, Zap, Clock, MapPin, Users, Play, Check, AlertCircle, Eye } from 'lucide-react'
 import { useRecruitStore } from '@/stores/recruitStore'
-import { autoScheduleInterviews } from '@/utils/scheduler'
+import { autoScheduleInterviews, checkConflicts } from '@/utils/scheduler'
 import type { InterviewPriority, InterviewStatus } from '@/types'
 
 const PRIORITY_OPTIONS: { value: InterviewPriority | 'all'; label: string }[] = [
@@ -53,6 +53,7 @@ export default function InterviewList() {
   const [priorityFilter, setPriorityFilter] = useState<InterviewPriority | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<InterviewStatus | 'all'>('all')
   const [scheduling, setScheduling] = useState(false)
+  const [scheduleResult, setScheduleResult] = useState<{ scheduled: number; failures: Array<{ resumeName: string; reason: string }> } | null>(null)
 
   const filtered = useMemo(() => {
     return interviews.filter((i) => {
@@ -74,6 +75,7 @@ export default function InterviewList() {
 
   const handleAutoSchedule = () => {
     setScheduling(true)
+    setScheduleResult(null)
     const pendingResumes = resumes
       .filter((r) => r.status === 'confirmed' && !interviews.some((i) => i.resumeId === r.id))
       .map((r) => ({
@@ -84,14 +86,20 @@ export default function InterviewList() {
 
     if (pendingResumes.length === 0) {
       setScheduling(false)
+      setScheduleResult({ scheduled: 0, failures: [] })
       return
     }
 
-    const results = autoScheduleInterviews(pendingResumes, interviewers, meetingRooms, interviews)
-    for (const result of results) {
-      const { isNew, ...interviewData } = result
+    const result = autoScheduleInterviews(pendingResumes, interviewers, meetingRooms, interviews)
+    for (const item of result.scheduled) {
+      const { isNew, ...interviewData } = item
       addInterview(interviewData)
     }
+    const failureNames = result.failures.map((f) => ({
+      resumeName: getResumeName(f.resumeId),
+      reason: f.reason,
+    }))
+    setScheduleResult({ scheduled: result.scheduled.length, failures: failureNames })
     setScheduling(false)
   }
 
@@ -173,6 +181,36 @@ export default function InterviewList() {
             {scheduling ? '排期中...' : '自动排期'}
           </button>
         </div>
+
+        {scheduleResult && (
+          <div className={`rounded-xl p-4 mb-6 border ${scheduleResult.failures.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {scheduleResult.failures.length > 0 ? (
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                ) : (
+                  <Check className="w-4 h-4 text-green-600" />
+                )}
+                <span className="text-sm font-medium">
+                  成功安排 {scheduleResult.scheduled} 场面试
+                  {scheduleResult.failures.length > 0 && `，${scheduleResult.failures.length} 场因冲突无法安排`}
+                </span>
+              </div>
+              <button onClick={() => setScheduleResult(null)} className="text-gray-400 hover:text-gray-600">
+                ×
+              </button>
+            </div>
+            {scheduleResult.failures.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {scheduleResult.failures.map((f, idx) => (
+                  <div key={idx} className="text-xs text-amber-700">
+                    {f.resumeName}：{f.reason}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-6">
           <div className="flex items-center gap-6 flex-wrap">
@@ -266,8 +304,10 @@ export default function InterviewList() {
                     const priorityBadge = PRIORITY_BADGE[interview.priority]
                     const statusBadge = STATUS_BADGE[interview.status]
                     const actionBtn = getActionButton(interview)
+                    const conflicts = checkConflicts(interview, interviews)
+                    const hasConflict = conflicts.interviewerConflict || conflicts.roomConflict
                     return (
-                      <tr key={interview.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                      <tr key={interview.id} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${hasConflict ? 'bg-red-50/50' : ''}`}>
                         <td className="px-4 py-3">
                           <span className="font-medium text-gray-900">{getResumeName(interview.resumeId)}</span>
                         </td>
@@ -285,6 +325,12 @@ export default function InterviewList() {
                           <span className={`inline-block px-2 py-0.5 text-xs rounded-full ${statusBadge.className}`}>
                             {statusBadge.label}
                           </span>
+                          {hasConflict && (
+                            <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-red-500" title={conflicts.interviewerConflict ? '面试官时间冲突' : '会议室时间冲突'}>
+                              <AlertCircle className="w-3 h-3" />
+                              冲突
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           {actionBtn && (
