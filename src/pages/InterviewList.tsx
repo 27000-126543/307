@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Calendar, List, Filter, Zap, Clock, MapPin, Users, Play, Check, AlertCircle, Eye } from 'lucide-react'
+import { Calendar, List, Filter, Zap, Clock, MapPin, Users, Play, Check, AlertCircle, Eye, Plus, X } from 'lucide-react'
 import { useRecruitStore } from '@/stores/recruitStore'
 import { autoScheduleInterviews, checkConflicts } from '@/utils/scheduler'
 import type { InterviewPriority, InterviewStatus } from '@/types'
@@ -54,6 +54,9 @@ export default function InterviewList() {
   const [statusFilter, setStatusFilter] = useState<InterviewStatus | 'all'>('all')
   const [scheduling, setScheduling] = useState(false)
   const [scheduleResult, setScheduleResult] = useState<{ scheduled: number; failures: Array<{ resumeName: string; reason: string }> } | null>(null)
+  const [showNewForm, setShowNewForm] = useState(false)
+  const [newForm, setNewForm] = useState({ resumeId: '', interviewerId: '', roomId: '', scheduledAt: '', duration: 60, priority: 'normal' as InterviewPriority })
+  const [newFormError, setNewFormError] = useState('')
 
   const filtered = useMemo(() => {
     return interviews.filter((i) => {
@@ -172,14 +175,23 @@ export default function InterviewList() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">面试管理</h1>
-          <button
-            onClick={handleAutoSchedule}
-            disabled={scheduling}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            <Zap className="w-4 h-4" />
-            {scheduling ? '排期中...' : '自动排期'}
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => { setShowNewForm(true); setNewForm({ resumeId: '', interviewerId: '', roomId: '', scheduledAt: '', duration: 60, priority: 'normal' }); setNewFormError('') }}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              新建面试
+            </button>
+            <button
+              onClick={handleAutoSchedule}
+              disabled={scheduling}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            >
+              <Zap className="w-4 h-4" />
+              {scheduling ? '排期中...' : '自动排期'}
+            </button>
+          </div>
         </div>
 
         {scheduleResult && (
@@ -209,6 +221,160 @@ export default function InterviewList() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {showNewForm && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowNewForm(false)}>
+            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-bold text-gray-900">新建面试</h2>
+                <button onClick={() => setShowNewForm(false)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">候选人</label>
+                  <select
+                    value={newForm.resumeId}
+                    onChange={(e) => setNewForm({ ...newForm, resumeId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  >
+                    <option value="">请选择候选人</option>
+                    {resumes.filter((r) => r.status === 'confirmed' || r.status === 'interviewing' || r.status === 'screened' || r.status === 'recommended').map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}{r.matchedJobId ? ` · ${jobs.find((j) => j.id === r.matchedJobId)?.title || ''}` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">面试官</label>
+                  <select
+                    value={newForm.interviewerId}
+                    onChange={(e) => setNewForm({ ...newForm, interviewerId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  >
+                    <option value="">请选择面试官</option>
+                    {interviewers.map((iv) => (
+                      <option key={iv.id} value={iv.id}>{iv.name} · {iv.department} {iv.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">会议室</label>
+                  <select
+                    value={newForm.roomId}
+                    onChange={(e) => setNewForm({ ...newForm, roomId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  >
+                    <option value="">请选择会议室</option>
+                    {meetingRooms.map((mr) => (
+                      <option key={mr.id} value={mr.id}>{mr.name} · {mr.location}（{mr.capacity}人）</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">面试时间</label>
+                    <input
+                      type="datetime-local"
+                      value={newForm.scheduledAt}
+                      onChange={(e) => setNewForm({ ...newForm, scheduledAt: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">时长（分钟）</label>
+                    <select
+                      value={newForm.duration}
+                      onChange={(e) => setNewForm({ ...newForm, duration: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    >
+                      <option value={30}>30分钟</option>
+                      <option value={60}>60分钟</option>
+                      <option value={90}>90分钟</option>
+                      <option value={120}>120分钟</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">优先级</label>
+                  <div className="flex gap-2">
+                    {(['urgent', 'high', 'normal', 'low'] as const).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setNewForm({ ...newForm, priority: p })}
+                        className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+                          newForm.priority === p
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {PRIORITY_BADGE[p].label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {newFormError && (
+                  <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    <span className="text-sm text-red-700">{newFormError}</span>
+                  </div>
+                )}
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => setShowNewForm(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!newForm.resumeId || !newForm.interviewerId || !newForm.roomId || !newForm.scheduledAt) {
+                        setNewFormError('请填写完整面试信息')
+                        return
+                      }
+                      const selectedResume = resumes.find((r) => r.id === newForm.resumeId)
+                      if (!selectedResume?.matchedJobId) {
+                        setNewFormError('该候选人尚未匹配岗位，无法安排面试')
+                        return
+                      }
+                      const scheduledAt = newForm.scheduledAt.includes('T') ? newForm.scheduledAt : `${newForm.scheduledAt}T00:00`
+                      const conflicts = checkConflicts(
+                        { interviewerId: newForm.interviewerId, roomId: newForm.roomId, scheduledAt, duration: newForm.duration },
+                        interviews
+                      )
+                      const conflictMsgs: string[] = []
+                      if (conflicts.interviewerConflict) conflictMsgs.push('面试官时间冲突')
+                      if (conflicts.roomConflict) conflictMsgs.push('会议室时间冲突')
+                      if (conflictMsgs.length > 0) {
+                        setNewFormError(`无法保存：${conflictMsgs.join('、')}，请调整面试官、会议室或时间`)
+                        return
+                      }
+                      const newInterview = {
+                        id: `it_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                        resumeId: newForm.resumeId,
+                        jobId: selectedResume.matchedJobId,
+                        interviewerId: newForm.interviewerId,
+                        roomId: newForm.roomId,
+                        scheduledAt,
+                        duration: newForm.duration,
+                        status: 'scheduled' as const,
+                        priority: newForm.priority,
+                      }
+                      addInterview(newInterview)
+                      setShowNewForm(false)
+                      setNewForm({ resumeId: '', interviewerId: '', roomId: '', scheduledAt: '', duration: 60, priority: 'normal' })
+                      setNewFormError('')
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    保存
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

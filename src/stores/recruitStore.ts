@@ -176,6 +176,14 @@ export const useRecruitStore = create<RecruitStore>()(
         const offer = s.offers.find((o) => o.id === id)
         if (!offer) return {}
         const resume = s.resumes.find((r) => r.id === offer.resumeId)
+        const existingTasks = s.onboardingTasks.filter((t) => t.offerId === id)
+        if (existingTasks.length > 0) {
+          return {
+            offers: s.offers.map((o) => (o.id === id ? { ...o, status: 'accepted' as const } : o)),
+            resumes: resume ? s.resumes.map((r) => (r.id === resume.id ? { ...r, status: 'hired' as const } : r)) : s.resumes,
+            todos: s.todos.filter((t) => !(t.targetId === id && t.type === 'offer')),
+          }
+        }
         return {
           offers: s.offers.map((o) => (o.id === id ? { ...o, status: 'accepted' as const } : o)),
           resumes: resume ? s.resumes.map((r) => (r.id === resume.id ? { ...r, status: 'hired' as const } : r)) : s.resumes,

@@ -191,25 +191,32 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold text-gray-900">招聘漏斗看板</h2>
         </div>
         {(() => {
+          const offerResumeIds = new Set(offers.map((o) => o.resumeId))
+          const acceptedOfferResumeIds = new Set(offers.filter((o) => o.status === 'accepted').map((o) => o.resumeId))
+          const hiredResumeIds = new Set(onboardingTasks.filter((t) => t.type === 'workstation' && t.status === 'completed').map((t) => {
+            const offer = offers.find((o) => o.id === t.offerId)
+            return offer?.resumeId
+          }).filter(Boolean))
+
           const FUNNEL_STAGES = [
-            { key: 'pending', label: '简历录入', statuses: ['pending'] as const },
-            { key: 'screened', label: '初筛通过', statuses: ['screened', 'recommended'] as const },
-            { key: 'confirmed', label: '主管确认', statuses: ['confirmed'] as const },
-            { key: 'interviewing', label: '面试', statuses: ['interviewing'] as const },
-            { key: 'offered', label: 'Offer', statuses: ['offered'] as const },
-            { key: 'hired', label: '入职', statuses: ['hired'] as const },
+            { key: 'pending', label: '简历录入', getResumes: () => resumes.filter((r) => r.status === 'pending') },
+            { key: 'screened', label: '初筛通过', getResumes: () => resumes.filter((r) => ['screened', 'recommended'].includes(r.status)) },
+            { key: 'confirmed', label: '主管确认', getResumes: () => resumes.filter((r) => r.status === 'confirmed' || r.status === 'interviewing') },
+            { key: 'interviewing', label: '面试', getResumes: () => resumes.filter((r) => interviews.some((i) => i.resumeId === r.id)) },
+            { key: 'offered', label: 'Offer', getResumes: () => resumes.filter((r) => offerResumeIds.has(r.id)) },
+            { key: 'hired', label: '入职', getResumes: () => resumes.filter((r) => acceptedOfferResumeIds.has(r.id) || hiredResumeIds.has(r.id)) },
           ]
-          const stageCounts = FUNNEL_STAGES.map((stage) => {
-            const count = resumes.filter((r) => stage.statuses.includes(r.status)).length
-            return { ...stage, count }
+          const stageData = FUNNEL_STAGES.map((stage) => {
+            const stageResumes = stage.getResumes()
+            return { ...stage, count: stageResumes.length, stageResumes }
           })
-          const maxCount = Math.max(...stageCounts.map((s) => s.count), 1)
+          const maxCount = Math.max(...stageData.map((s) => s.count), 1)
           return (
             <>
               <div className="flex items-end gap-3">
-                {stageCounts.map((stage, idx) => {
+                {stageData.map((stage, idx) => {
                   const widthPercent = Math.max((stage.count / maxCount) * 100, 8)
-                  const prevCount = idx > 0 ? stageCounts[idx - 1].count : stage.count
+                  const prevCount = idx > 0 ? stageData[idx - 1].count : stage.count
                   const convRate = idx > 0 && prevCount > 0 ? Math.round((stage.count / prevCount) * 100) : null
                   return (
                     <div key={stage.key} className="flex-1 flex flex-col items-center">
@@ -242,9 +249,9 @@ export default function Dashboard() {
                 })}
               </div>
               {funnelStage && (() => {
-                const stage = stageCounts.find((s) => s.key === funnelStage)
+                const stage = stageData.find((s) => s.key === funnelStage)
                 if (!stage) return null
-                const stageResumes = resumes.filter((r) => stage.statuses.includes(r.status))
+                const stageResumes = stage.stageResumes
                 return (
                   <div className="mt-4 border border-gray-200 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -261,10 +268,14 @@ export default function Dashboard() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                         {stageResumes.map((r) => {
                           const job = r.matchedJobId ? jobs.find((j) => j.id === r.matchedJobId) : null
+                          const relatedOffer = offers.find((o) => o.resumeId === r.id)
+                          const targetPath = (stage.key === 'offered' || stage.key === 'hired') && relatedOffer
+                            ? `/offer/${relatedOffer.id}`
+                            : `/resume/${r.id}`
                           return (
                             <button
                               key={r.id}
-                              onClick={() => navigate(`/resume/${r.id}`)}
+                              onClick={() => navigate(targetPath)}
                               className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-brand-200 transition-colors text-left"
                             >
                               <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 text-sm font-bold shrink-0">

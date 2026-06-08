@@ -23,9 +23,11 @@ const BC_STATUS_MAP: Record<string, { label: string; className: string }> = {
 export default function OfferDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { offers, resumes, jobs, approvalRecords, backgroundChecks, onboardingTasks, acceptOffer, declineOffer } = useRecruitStore()
+  const { offers, resumes, jobs, approvalRecords, backgroundChecks, onboardingTasks, acceptOffer, declineOffer, approveOfferHR, rejectOfferHR, approveOfferGM, rejectOfferGM } = useRecruitStore()
   const [showDeclineInput, setShowDeclineInput] = useState(false)
   const [declineReason, setDeclineReason] = useState('')
+  const [showRejectInput, setShowRejectInput] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
 
   const offer = offers.find((o) => o.id === id)
 
@@ -169,6 +171,65 @@ export default function OfferDetail() {
                 </div>
               ))}
             </div>
+            {(offer.status === 'pending' || offer.status === 'hr_approved') && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-sm font-medium text-gray-700 mb-3">
+                  {offer.status === 'pending' ? 'HR经理审批操作' : '总经理审批操作'}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (offer.status === 'pending') approveOfferHR(offer.id)
+                      else approveOfferGM(offer.id)
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    通过
+                  </button>
+                  <button
+                    onClick={() => { setShowRejectInput(true); setRejectReason('') }}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    驳回
+                  </button>
+                </div>
+                {showRejectInput && (
+                  <div className="mt-3 space-y-2">
+                    <textarea
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      placeholder="请输入驳回原因..."
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+                      rows={3}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          if (rejectReason.trim()) {
+                            if (offer.status === 'pending') rejectOfferHR(offer.id, rejectReason.trim())
+                            else rejectOfferGM(offer.id, rejectReason.trim())
+                            setShowRejectInput(false)
+                            setRejectReason('')
+                          }
+                        }}
+                        disabled={!rejectReason.trim()}
+                        className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                      >
+                        确认驳回
+                      </button>
+                      <button
+                        onClick={() => { setShowRejectInput(false); setRejectReason('') }}
+                        className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
